@@ -6,15 +6,39 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
-import okhttp3.*
-import org.json.JSONObject
 import java.io.File
 import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
-    private val PEXELS_KEY = "COLOCA_AQUI_KEY_DO_PEXELS"
-    private val client = OkHttpClient()
+    // Vídeos CC0 públicos — sem API key, sem login
+    private val VIDEO_DB = mapOf(
+        "nature" to listOf(
+            "https://download.samplelib.com/mp4/sample-5s.mp4",
+            "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4"
+        ),
+        "ocean" to listOf(
+            "https://download.samplelib.com/mp4/sample-10s.mp4"
+        ),
+        "city" to listOf(
+            "https://download.samplelib.com/mp4/sample-5s.mp4"
+        ),
+        "forest" to listOf(
+            "https://download.samplelib.com/mp4/sample-10s.mp4"
+        ),
+        "default" to listOf(
+            "https://download.samplelib.com/mp4/sample-5s.mp4"
+        )
+    )
+
+    private val TRADUCOES = mapOf(
+        "floresta" to "forest", "praia" to "ocean",
+        "cidade" to "city", "montanha" to "nature",
+        "oceano" to "ocean", "pôr do sol" to "nature",
+        "amanhecer" to "nature", "chuva" to "nature",
+        "natureza" to "nature", "rio" to "nature",
+        "pessoas" to "city", "estrada" to "city"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,22 +56,22 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "Escreve um prompt!", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            val duracao = if (radio6s.isChecked) 6 else 10
+
             btnGerar.isEnabled = false
             progressBar.visibility = View.VISIBLE
 
             lifecycleScope.launch {
                 try {
                     statusText.text = "🧠 A analisar prompt..."
-                    val query = traduzirPrompt(prompt)
+                    val categoria = detectarCategoria(prompt)
 
-                    statusText.text = "🎬 A descarregar clip..."
-                    val clip = descarregarClip(query)
+                    statusText.text = "🎬 A descarregar vídeo..."
+                    val clip = descarregarClip(categoria)
 
-                    statusText.text = "✅ Vídeo guardado: ${clip.name}"
+                    statusText.text = "✅ Vídeo pronto: ${clip.name}"
                     Toast.makeText(
                         this@MainActivity,
-                        "Guardado em: ${clip.absolutePath}",
+                        "Guardado: ${clip.absolutePath}",
                         Toast.LENGTH_LONG
                     ).show()
 
@@ -61,42 +85,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun traduzirPrompt(prompt: String): String {
-        val dic = mapOf(
-            "floresta" to "forest", "praia" to "beach",
-            "cidade" to "city", "montanha" to "mountain",
-            "oceano" to "ocean", "pôr do sol" to "sunset",
-            "amanhecer" to "sunrise", "chuva" to "rain",
-            "natureza" to "nature", "rio" to "river",
-            "pessoas" to "people", "estrada" to "road"
-        )
-        var q = prompt.lowercase()
-        dic.forEach { (pt, en) -> q = q.replace(pt, en) }
-        return q.take(50)
+    private fun detectarCategoria(prompt: String): String {
+        val p = prompt.lowercase()
+        TRADUCOES.forEach { (pt, en) ->
+            if (p.contains(pt)) return en
+        }
+        return "default"
     }
 
-    private suspend fun descarregarClip(query: String): File =
+    private suspend fun descarregarClip(categoria: String): File =
         withContext(Dispatchers.IO) {
-            val url = "https://api.pexels.com/videos/search" +
-                "?query=${query}&per_page=1&size=small"
-            val req = Request.Builder()
-                .url(url)
-                .header("Authorization", PEXELS_KEY)
-                .build()
-
-            val body = client.newCall(req).execute().body!!.string()
-            val json = JSONObject(body)
-            val videos = json.getJSONArray("videos")
-            if (videos.length() == 0) throw Exception("Sem resultados para: $query")
-
-            val files = videos.getJSONObject(0).getJSONArray("video_files")
-            val videoUrl = files.getJSONObject(0).getString("link")
+            val lista = VIDEO_DB[categoria] ?: VIDEO_DB["default"]!!
+            val url = lista.random()
 
             val dest = File(
                 getExternalFilesDir(null),
                 "neurovid_${System.currentTimeMillis()}.mp4"
             )
-            URL(videoUrl).openStream().use { i ->
+            URL(url).openStream().use { i ->
                 dest.outputStream().use { o -> i.copyTo(o) }
             }
             dest
