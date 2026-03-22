@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="#0D0D0D">
+
+    <TextView
+        android:text="NeuroVid"
+        android:textSize="32sp"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:text="Gerador de Vídeo com IA"
+        android:textSize="14sp"
+        android:textColor="#888888"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"/>
+
+    <EditText
+        android:id="@+id/promptInput"
+        android:hint="Descreve o teu vídeo em português..."
+        android:textColor="#FFFFFF"
+        android:textColorHint="#555555"
+        android:background="#1A1A1A"
+        android:padding="16dp"
+        android:minLines="3"
+        android:gravity="top"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"/>
+
+    <RadioGroup
+        android:id="@+id/duracaoGroup"
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="24dp">
+
+        <RadioButton
+            android:id="@+id/radio6s"
+            android:text="6 segundos"
+            android:textColor="#FFFFFF"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:layout_marginEnd="24dp"/>
+
+        <RadioButton
+            android:id="@+id/radio10s"
+            android:text="10 segundos"
+            android:textColor="#FFFFFF"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+    </RadioGroup>
+
+    <Button
+        android:id="@+id/btnGerar"
+        android:text="GERAR VÍDEO"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:backgroundTint="#6C63FF"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:layout_marginBottom="24dp"/>
+
+    <TextView
+        android:id="@+id/statusText"
+        android:text="Pronto para gerar"
+        android:textColor="#888888"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"/>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:visibility="gone"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"/>
+
+</LinearLayout>
