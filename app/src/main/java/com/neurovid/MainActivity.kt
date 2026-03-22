@@ -6,38 +6,26 @@ import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
+import okhttp3.*
+import org.json.JSONObject
 import java.io.File
 import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
-    // Vídeos CC0 públicos — sem API key, sem login
-    private val VIDEO_DB = mapOf(
-        "nature" to listOf(
-            "https://download.samplelib.com/mp4/sample-5s.mp4",
-            "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4"
-        ),
-        "ocean" to listOf(
-            "https://download.samplelib.com/mp4/sample-10s.mp4"
-        ),
-        "city" to listOf(
-            "https://download.samplelib.com/mp4/sample-5s.mp4"
-        ),
-        "forest" to listOf(
-            "https://download.samplelib.com/mp4/sample-10s.mp4"
-        ),
-        "default" to listOf(
-            "https://download.samplelib.com/mp4/sample-5s.mp4"
-        )
-    )
+    private val client = OkHttpClient()
 
     private val TRADUCOES = mapOf(
-        "floresta" to "forest", "praia" to "ocean",
-        "cidade" to "city", "montanha" to "nature",
-        "oceano" to "ocean", "pôr do sol" to "nature",
-        "amanhecer" to "nature", "chuva" to "nature",
-        "natureza" to "nature", "rio" to "nature",
-        "pessoas" to "city", "estrada" to "city"
+        "floresta" to "forest", "praia" to "beach",
+        "cidade" to "city", "montanha" to "mountain",
+        "oceano" to "ocean", "pôr do sol" to "sunset",
+        "amanhecer" to "sunrise", "chuva" to "rain",
+        "natureza" to "nature", "rio" to "river",
+        "pessoas" to "people", "estrada" to "road",
+        "fogo" to "fire", "neve" to "snow",
+        "flores" to "flowers", "animais" to "animals",
+        "mar" to "sea", "campo" to "field",
+        "céu" to "sky", "noite" to "night"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -63,10 +51,13 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     statusText.text = "🧠 A analisar prompt..."
-                    val categoria = detectarCategoria(prompt)
+                    val query = traduzirPrompt(prompt)
+
+                    statusText.text = "🔍 A procurar no Wikimedia..."
+                    val videoUrl = procurarWikimedia(query)
 
                     statusText.text = "🎬 A descarregar vídeo..."
-                    val clip = descarregarClip(categoria)
+                    val clip = descarregarClip(videoUrl)
 
                     statusText.text = "✅ Vídeo pronto: ${clip.name}"
                     Toast.makeText(
@@ -85,24 +76,66 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun detectarCategoria(prompt: String): String {
+    private fun traduzirPrompt(prompt: String): String {
         val p = prompt.lowercase()
         TRADUCOES.forEach { (pt, en) ->
             if (p.contains(pt)) return en
         }
-        return "default"
+        // Se não encontrar tradução usa o prompt original
+        return p.split(" ").take(3).joinToString(" ")
     }
 
-    private suspend fun descarregarClip(categoria: String): File =
+    private suspend fun procurarWikimedia(query: String): String =
         withContext(Dispatchers.IO) {
-            val lista = VIDEO_DB[categoria] ?: VIDEO_DB["default"]!!
-            val url = lista.random()
+            // Wikimedia Commons API — sem API key, 100% grátis
+            val url = "https://commons.wikimedia.org/w/api.php" +
+                "?action=query" +
+                "&generator=search" +
+                "&gsrsearch=$query" +
+                "&gsrnamespace=6" +
+                "&gsrlimit=10" +
+                "&prop=videoinfo" +
+                "&viprop=url|mime" +
+                "&format=json"
 
+            val req = Request.Builder().url(url).build()
+            val body = client.newCall(req).execute().body!!.string()
+            val json = JSONObject(body)
+
+            val pages = json
+                .getJSONObject("query")
+                .getJSONObject("pages")
+
+            // Procura primeiro vídeo .webm ou .ogv
+            val keys = pages.keys()
+            while (keys.hasNext()) {
+                val page = pages.getJSONObject(keys.next())
+                val title = page.optString("title", "")
+                if (title.endsWith(".webm", true) || title.endsWith(".ogv", true)) {
+                    val videoinfo = page
+                        .getJSONArray("videoinfo")
+                        .getJSONObject(0)
+                    val mime = videoinfo.optString("mime", "")
+                    if (mime.startsWith("video/")) {
+                        return@withContext videoinfo.getString("url")
+                    }
+                }
+            }
+            throw Exception("Nenhum vídeo encontrado para: $query")
+        }
+
+    private suspend fun descarregarClip(videoUrl: String): File =
+        withContext(Dispatchers.IO) {
+            val extensao = if (videoUrl.contains(".webm")) "webm" else "ogv"
             val dest = File(
                 getExternalFilesDir(null),
-                "neurovid_${System.currentTimeMillis()}.mp4"
+                "neurovid_${System.currentTimeMillis()}.$extensao"
             )
-            URL(url).openStream().use { i ->
+            val req = Request.Builder()
+                .url(videoUrl)
+                .header("User-Agent", "NeuroVid/1.0")
+                .build()
+            client.newCall(req).execute().body!!.byteStream().use { i ->
                 dest.outputStream().use { o -> i.copyTo(o) }
             }
             dest
