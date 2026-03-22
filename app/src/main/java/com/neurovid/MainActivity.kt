@@ -7,25 +7,25 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import okhttp3.*
-import org.json.JSONObject
 import java.io.File
-import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
-    private val client = OkHttpClient()
+    private val client = OkHttpClient.Builder()
+        .followRedirects(true)
+        .followSslRedirects(true)
+        .build()
 
-    private val TRADUCOES = mapOf(
-        "floresta" to "forest", "praia" to "beach",
-        "cidade" to "city", "montanha" to "mountain",
-        "oceano" to "ocean", "pôr do sol" to "sunset",
-        "amanhecer" to "sunrise", "chuva" to "rain",
-        "natureza" to "nature", "rio" to "river",
-        "pessoas" to "people", "estrada" to "road",
-        "fogo" to "fire", "neve" to "snow",
-        "flores" to "flowers", "animais" to "animals",
-        "mar" to "sea", "campo" to "field",
-        "céu" to "sky", "noite" to "night"
+    private val VIDEOS = mapOf(
+        "arvore" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/1f/2013-07-23_Himeji_Castle_and_surroundings_from_Seiho-en_garden.webm/2013-07-23_Himeji_Castle_and_surroundings_from_Seiho-en_garden.webm.360p.webm",
+        "floresta" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c7/The_Jungle_Book_opening.webm/The_Jungle_Book_opening.webm.360p.webm",
+        "praia" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
+        "mar" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
+        "oceano" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
+        "cidade" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2c/ROC-Taiwan-Taipei-City-Night.webm/ROC-Taiwan-Taipei-City-Night.webm.360p.webm",
+        "noite" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2c/ROC-Taiwan-Taipei-City-Night.webm/ROC-Taiwan-Taipei-City-Night.webm.360p.webm",
+        "natureza" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
+        "default" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,7 +36,6 @@ class MainActivity : AppCompatActivity() {
         val promptInput = findViewById<EditText>(R.id.promptInput)
         val statusText = findViewById<TextView>(R.id.statusText)
         val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-        val radio6s = findViewById<RadioButton>(R.id.radio6s)
 
         btnGerar.setOnClickListener {
             val prompt = promptInput.text.toString().trim()
@@ -51,18 +50,15 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch {
                 try {
                     statusText.text = "🧠 A analisar prompt..."
-                    val query = traduzirPrompt(prompt)
-
-                    statusText.text = "🔍 A procurar no Wikimedia..."
-                    val videoUrl = procurarWikimedia(query)
+                    val url = escolherVideo(prompt)
 
                     statusText.text = "🎬 A descarregar vídeo..."
-                    val clip = descarregarClip(videoUrl)
+                    val clip = descarregarClip(url)
 
-                    statusText.text = "✅ Vídeo pronto: ${clip.name}"
+                    statusText.text = "✅ Guardado: ${clip.name}"
                     Toast.makeText(
                         this@MainActivity,
-                        "Guardado: ${clip.absolutePath}",
+                        "Vídeo em: ${clip.absolutePath}",
                         Toast.LENGTH_LONG
                     ).show()
 
@@ -76,60 +72,19 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun traduzirPrompt(prompt: String): String {
+    private fun escolherVideo(prompt: String): String {
         val p = prompt.lowercase()
-        TRADUCOES.forEach { (pt, en) ->
-            if (p.contains(pt)) return en
+        VIDEOS.forEach { (palavra, url) ->
+            if (p.contains(palavra)) return url
         }
-        // Se não encontrar tradução usa o prompt original
-        return p.split(" ").take(3).joinToString(" ")
+        return VIDEOS["default"]!!
     }
-
-    private suspend fun procurarWikimedia(query: String): String =
-        withContext(Dispatchers.IO) {
-            // Wikimedia Commons API — sem API key, 100% grátis
-            val url = "https://commons.wikimedia.org/w/api.php" +
-                "?action=query" +
-                "&generator=search" +
-                "&gsrsearch=$query" +
-                "&gsrnamespace=6" +
-                "&gsrlimit=10" +
-                "&prop=videoinfo" +
-                "&viprop=url|mime" +
-                "&format=json"
-
-            val req = Request.Builder().url(url).build()
-            val body = client.newCall(req).execute().body!!.string()
-            val json = JSONObject(body)
-
-            val pages = json
-                .getJSONObject("query")
-                .getJSONObject("pages")
-
-            // Procura primeiro vídeo .webm ou .ogv
-            val keys = pages.keys()
-            while (keys.hasNext()) {
-                val page = pages.getJSONObject(keys.next())
-                val title = page.optString("title", "")
-                if (title.endsWith(".webm", true) || title.endsWith(".ogv", true)) {
-                    val videoinfo = page
-                        .getJSONArray("videoinfo")
-                        .getJSONObject(0)
-                    val mime = videoinfo.optString("mime", "")
-                    if (mime.startsWith("video/")) {
-                        return@withContext videoinfo.getString("url")
-                    }
-                }
-            }
-            throw Exception("Nenhum vídeo encontrado para: $query")
-        }
 
     private suspend fun descarregarClip(videoUrl: String): File =
         withContext(Dispatchers.IO) {
-            val extensao = if (videoUrl.contains(".webm")) "webm" else "ogv"
             val dest = File(
                 getExternalFilesDir(null),
-                "neurovid_${System.currentTimeMillis()}.$extensao"
+                "neurovid_${System.currentTimeMillis()}.webm"
             )
             val req = Request.Builder()
                 .url(videoUrl)
