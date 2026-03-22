@@ -1,9 +1,13 @@
 package com.neurovid
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -17,14 +21,13 @@ class MainActivity : AppCompatActivity() {
         .build()
 
     private val VIDEOS = mapOf(
-        "arvore" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/1/1f/2013-07-23_Himeji_Castle_and_surroundings_from_Seiho-en_garden.webm/2013-07-23_Himeji_Castle_and_surroundings_from_Seiho-en_garden.webm.360p.webm",
-        "floresta" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c7/The_Jungle_Book_opening.webm/The_Jungle_Book_opening.webm.360p.webm",
+        "arvore" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
+        "floresta" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
         "praia" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
         "mar" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
         "oceano" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
         "cidade" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2c/ROC-Taiwan-Taipei-City-Night.webm/ROC-Taiwan-Taipei-City-Night.webm.360p.webm",
         "noite" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/2/2c/ROC-Taiwan-Taipei-City-Night.webm/ROC-Taiwan-Taipei-City-Night.webm.360p.webm",
-        "natureza" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm",
         "default" to "https://upload.wikimedia.org/wikipedia/commons/transcoded/8/87/Waves_at_Acheron.ogv/Waves_at_Acheron.ogv.360p.webm"
     )
 
@@ -53,14 +56,10 @@ class MainActivity : AppCompatActivity() {
                     val url = escolherVideo(prompt)
 
                     statusText.text = "🎬 A descarregar vídeo..."
-                    val clip = descarregarClip(url)
+                    val clip = descarregarClip(url, prompt)
 
-                    statusText.text = "✅ Guardado: ${clip.name}"
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Vídeo em: ${clip.absolutePath}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    statusText.text = "✅ A abrir vídeo..."
+                    abrirVideo(clip)
 
                 } catch (e: Exception) {
                     statusText.text = "❌ Erro: ${e.message}"
@@ -80,19 +79,46 @@ class MainActivity : AppCompatActivity() {
         return VIDEOS["default"]!!
     }
 
-    private suspend fun descarregarClip(videoUrl: String): File =
+    private suspend fun descarregarClip(videoUrl: String, prompt: String): File =
         withContext(Dispatchers.IO) {
-            val dest = File(
-                getExternalFilesDir(null),
-                "neurovid_${System.currentTimeMillis()}.webm"
+            // Guarda em Downloads — pasta visível
+            val downloads = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS
             )
+            downloads.mkdirs()
+
+            val nome = "NeuroVid_${prompt.take(10)}_${System.currentTimeMillis()}.webm"
+            val dest = File(downloads, nome)
+
             val req = Request.Builder()
                 .url(videoUrl)
                 .header("User-Agent", "NeuroVid/1.0")
                 .build()
+
             client.newCall(req).execute().body!!.byteStream().use { i ->
                 dest.outputStream().use { o -> i.copyTo(o) }
             }
             dest
         }
+
+    private fun abrirVideo(file: File) {
+        try {
+            val uri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.provider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "video/webm")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Abrir vídeo com..."))
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Vídeo guardado em Downloads!",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 }
