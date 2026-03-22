@@ -1,5 +1,3 @@
-name: Build APK
-
 on:
   push:
     branches: ["*"]
@@ -21,9 +19,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
         with:
           gradle-version: "8.2"
-
-      - name: Permissao gradlew
-        run: chmod +x gradlew
 
       - name: Compilar APK
         run: gradle assembleDebug
